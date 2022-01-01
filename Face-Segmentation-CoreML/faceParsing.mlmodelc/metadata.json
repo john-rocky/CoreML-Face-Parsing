@@ -1,0 +1,68 @@
+[
+  {
+    "metadataOutputVersion" : "3.0",
+    "storagePrecision" : "Float32",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float32",
+        "formattedType" : "MultiArray (Float32)",
+        "shortDescription" : "",
+        "shape" : "[]",
+        "name" : "argmax_out",
+        "type" : "MultiArray"
+      }
+    ],
+    "modelParameters" : [
+
+    ],
+    "specificationVersion" : 5,
+    "computePrecision" : "Float16",
+    "isUpdatable" : "0",
+    "availability" : {
+      "macOS" : "11.0",
+      "tvOS" : "14.0",
+      "watchOS" : "7.0",
+      "iOS" : "14.0",
+      "macCatalyst" : "14.0"
+    },
+    "neuralNetworkLayerTypeHistogram" : {
+      "Concat" : 1,
+      "ArgMax" : 1,
+      "Convolution" : 36,
+      "ActivationSigmoid" : 3,
+      "UpsampleBiLinear" : 3,
+      "UpsampleNearestNeighbor" : 3,
+      "PoolingMax" : 1,
+      "Squeeze" : 1,
+      "Add" : 11,
+      "Multiply" : 3,
+      "ActivationReLU" : 27,
+      "PoolingAverage" : 4
+    },
+    "modelType" : {
+      "name" : "MLModelType_neuralNetwork"
+    },
+    "userDefinedMetadata" : {
+      "com.github.apple.coremltools.version" : "5.1.0",
+      "com.github.apple.coremltools.source" : "torch==1.10.0+cu111"
+    },
+    "generatedClassName" : "faceParsing",
+    "inputSchema" : [
+      {
+        "height" : "512",
+        "colorspace" : "RGB",
+        "isOptional" : "0",
+        "width" : "512",
+        "isColor" : "1",
+        "formattedType" : "Image (Color 512 × 512)",
+        "hasSizeFlexibility" : "0",
+        "type" : "Image",
+        "shortDescription" : "",
+        "name" : "input"
+      }
+    ],
+    "method" : "predict"
+  }
+]
