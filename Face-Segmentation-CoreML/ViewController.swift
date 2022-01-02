@@ -16,7 +16,7 @@ class ViewController: UIViewController, PHPickerViewControllerDelegate, UIPicker
     var coreMLRequest:VNCoreMLRequest?
     var selectedImage:UIImage?
     
-    var outputTypes:[String] = ["all","skin","eyeBrowLeft","eyeBrowRight","eyeLeft","eyeRight","nose","teeth","lipUpper","lipLower","neck","cloth","hair","hat"]
+    var outputTypes:[String] = ["all","skin","eyeBrowLeft","eyeBrowRight","eyeLeft","eyeRight","nose","teeth","lipUpper","lipLower","neck","cloth","hair","hat","makeUp",]
     var outputType:OutputType = .all
     
     @IBOutlet weak var originalImageView: UIImageView!
@@ -57,8 +57,11 @@ class ViewController: UIViewController, PHPickerViewControllerDelegate, UIPicker
             guard let result = coreMLRequest.results?.first as? VNCoreMLFeatureValueObservation else {fatalError("Inference failed.")}
             let multiArray = result.featureValue.multiArrayValue
             guard let  outputCGImage = multiArray?.cgImage(min: 0, max: 18, channel: nil, outputType: outputType.rawValue) else {fatalError("Image processing failed.")}
+            let outputCIImage = CIImage(cgImage: outputCGImage).resize(as: ciImage.extent.size)
+            let context = CIContext()
+            guard let safeCGImage = context.createCGImage(outputCIImage, from: outputCIImage.extent) else {fatalError("Image processing failed.")}
             DispatchQueue.main.async { [weak self] in
-                let outputUIImage = UIImage(cgImage: outputCGImage)
+                let outputUIImage = UIImage(cgImage: safeCGImage)
                 self?.outputImageView.image = outputUIImage
             }
         } catch let error {
@@ -66,6 +69,65 @@ class ViewController: UIViewController, PHPickerViewControllerDelegate, UIPicker
         }
     }
     
+    func changeHairAndSkinColor(uiImage: UIImage) {
+        guard let coreMLRequest = coreMLRequest else {fatalError("Model initialization failed.")}
+        guard let ciImage = CIImage(image: uiImage) else {fatalError("Image failed.")}
+        let handler = VNImageRequestHandler(ciImage: ciImage, options: [:])
+        
+        do {
+            try handler.perform([coreMLRequest])
+            guard let result = coreMLRequest.results?.first as? VNCoreMLFeatureValueObservation else {fatalError("Inference failed.")}
+            let multiArray = result.featureValue.multiArrayValue
+            guard let lipUpperMatteCGImage = multiArray?.cgImage(min: 0, max: 18, channel: nil, outputType: OutputType.lipUpper.rawValue),
+            let lipLowerMatteCGImage = multiArray?.cgImage(min: 0, max: 18, channel: nil, outputType: OutputType.lipLower.rawValue),
+            let hairMatteCGImage = multiArray?.cgImage(min: 0, max: 18, channel: nil, outputType: OutputType.hair.rawValue) else {fatalError("Image processing failed.")}
+            let lipUpperMatteCIImage = CIImage(cgImage: lipUpperMatteCGImage).resize(as: ciImage.extent.size)
+            let lipLowerMatteCIImage = CIImage(cgImage: lipLowerMatteCGImage).resize(as: ciImage.extent.size)
+            let hairMatteCIImage = CIImage(cgImage: hairMatteCGImage).resize(as: ciImage.extent.size)
+            
+            var redArray: [CGFloat] = [10,2,1,0,0,0,0,0,0]
+            var redVector = CIVector(values: redArray, count: Int(redArray.count))
+            var greenArray: [CGFloat] = [0,1,0,0,0,0,0,0,0]
+            var greenVector = CIVector(values: greenArray, count: Int(greenArray.count))
+            var blueArray: [CGFloat] = [0,0,1,0,0,0,0,0,0]
+            var blueVector = CIVector(values: blueArray, count: Int(blueArray.count))
+
+            guard let lipEditedCIImage = CIFilter(name: "CIColorCrossPolynomial", parameters: [kCIInputImageKey:ciImage,
+                                                                                          "inputRedCoefficients":redVector,
+                                                                                          "inputGreenCoefficients":greenVector,
+                                                                                                "inputBlueCoefficients":blueVector])?.outputImage,
+            let lipUpperCompositedCIImage = CIFilter(name: "CIBlendWithMask", parameters: [
+                kCIInputImageKey: lipEditedCIImage,
+                kCIInputBackgroundImageKey:ciImage,
+                kCIInputMaskImageKey:lipUpperMatteCIImage])?.outputImage,
+            let lipLowerCompositedCIImage = CIFilter(name: "CIBlendWithMask", parameters: [
+                kCIInputImageKey: lipEditedCIImage,
+                kCIInputBackgroundImageKey:lipUpperCompositedCIImage,
+                kCIInputMaskImageKey:lipLowerMatteCIImage])?.outputImage else {fatalError("Image processing failed.")}
+            redArray = [5,5,5,0,0,0,0,0,0]
+            redVector = CIVector(values: redArray, count: Int(redArray.count))
+            greenArray = [1,1,0,0,1,0,0,0,0]
+            greenVector = CIVector(values: greenArray, count: Int(greenArray.count))
+            blueArray = [1,0,1,0,0,0,0,0,0]
+            blueVector = CIVector(values: blueArray, count: Int(blueArray.count))
+            guard let hairEditedCIImage = CIFilter(name: "CIColorCrossPolynomial", parameters: [kCIInputImageKey:ciImage,
+                                                                                          "inputRedCoefficients":redVector,
+                                                                                          "inputGreenCoefficients":greenVector,
+                                                                                                "inputBlueCoefficients":blueVector])?.outputImage,
+            let hairCompositedCIImage = CIFilter(name: "CIBlendWithMask", parameters: [
+                kCIInputImageKey: hairEditedCIImage,
+                kCIInputBackgroundImageKey:lipLowerCompositedCIImage,
+                kCIInputMaskImageKey:hairMatteCIImage])?.outputImage else {fatalError("Image processing failed.")}
+            let context = CIContext()
+            guard let safeCGImage = context.createCGImage(hairCompositedCIImage, from: hairCompositedCIImage.extent) else {fatalError("Image processing failed.")}
+            let editedUIImage = UIImage(cgImage: safeCGImage)
+            DispatchQueue.main.async { [weak self] in
+                self?.outputImageView.image = editedUIImage
+            }
+        } catch let error {
+            print(error)
+        }
+    }
     
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
@@ -151,6 +213,12 @@ class ViewController: UIViewController, PHPickerViewControllerDelegate, UIPicker
             outputType = .hair
         case "hat":
             outputType = .hat
+        case "makeUp":
+            guard let selectedImage = selectedImage else {
+                return
+            }
+            changeHairAndSkinColor(uiImage: selectedImage)
+            return
         default:
             break
         }
@@ -210,4 +278,12 @@ enum OutputType: Int {
     case cloth = 16
     case hair = 17
     case hat = 18
+}
+
+extension CIImage {
+    func resize(as size: CGSize) -> CIImage {
+        let selfSize = extent.size
+        let transform = CGAffineTransform(scaleX: size.width / selfSize.width, y: size.height / selfSize.height)
+        return transformed(by: transform)
+    }
 }
